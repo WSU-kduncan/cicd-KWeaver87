@@ -2,7 +2,7 @@
 
 This is a class project for CEG3120. The goal is to create a Dockerfile that hosts a static HTML file.
 
-## Part 1
+## Part 1 - Dockerize it
 
 ### Run Project Locally
 
@@ -11,7 +11,7 @@ This is a class project for CEG3120. The goal is to create a Dockerfile that hos
 - Run container (locally): `docker run --rm -d -p 8080:80 weaver254wright/cicdweaver254:latest`
 - View project locally: http://localhost:8080
 
-## Part 2
+## Part 2 - GitHub Actions and DockerHub
 
 ### Create DockerHub public repo
 
@@ -38,6 +38,38 @@ This is a class project for CEG3120. The goal is to create a Dockerfile that hos
 - Follow [DockerHub's instructions on Configure GitHub Actions](https://docs.docker.com/ci-cd/github-actions/) to configure the YAML file to fit your repo
 - Create commit using the strategy of your choice
 
-## Part 3
+## Part 3 - Deployment
 
-TODO: [Reference for ACME](https://wiki.alpinelinux.org/wiki/Nginx_as_reverse_proxy_with_acme_(letsencrypt))
+### Pulling the image & Running the container
+
+A CloudFormation template's [install script](./Project6-cf.yml#L141) handles these steps.
+
+### Post-install ACME commands
+
+The server won't work properly until SSL is fully configured, as it is set to forward connections to HTTPS. Best not to automate these commands, as they depend upon the domain name being resolvable.
+
+SSH into host, then open a shell inside container:
+
+```sh
+sudo docker exec -it cicdweaver254_instance sh
+```
+
+Register and issue cert:
+
+```sh
+acme.sh --register-account -m email@address.com
+acme.sh --issue -d your.domain.here -w /var/www/
+```
+
+Install cert:
+
+```sh
+acme.sh --install-cert -d your.domain.here \
+  --cert-file /etc/nginx/ssl/cert \
+  --key-file /etc/nginx/ssl/key \
+  --fullchain-file /etc/nginx/ssl/fullchain
+```
+
+### SSL info
+
+The container will store the SSL certs persistently in `/etc/nginx/ssl` on the EC2 instance. It's best to not lose these, otherwise you'll have to get a new cert issued.
