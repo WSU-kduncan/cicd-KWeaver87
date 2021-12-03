@@ -1,0 +1,200 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: >-
+  Creates an EC2 instance in a VPC to run a Docker image
+Parameters:
+  KeyName:
+    Description: Name of an existing EC2 KeyPair to enable SSH access to the instance
+    Type: 'AWS::EC2::KeyPair::KeyName'
+    ConstraintDescription: must be the name of an existing EC2 KeyPair.
+  # This SSHLocation could go.
+  SSHLocation:
+    Description: The CIDR address range that can be used to SSH to the EC2 instance
+    Type: String
+    MinLength: '9'
+    MaxLength: '18'
+    Default: 0.0.0.0/32
+    AllowedPattern: '(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})/(\d{1,2})'
+    ConstraintDescription: must be a valid IP CIDR range of the form x.x.x.x/x.
+  PublicURL:
+    Description: The domain to use
+    Type: String
+  EIPAllocationId:
+    Description: AllocationId of the existing EIP to use
+    Type: String
+Mappings:
+  AWSInstanceType2Arch: # Supported architectures (x64bit only)
+    t2.micro:
+      Arch: HVM64
+  AWSRegionUbuntu: # AMI for Ubuntu server in each supported region
+    us-east-1: # N. Virginia
+      PV64: NOT_SUPPORTED
+      HVM64: ami-09e67e426f25ce0d7 # AMI ID for Ubuntu 20 - Amazon Linux 2 AMI ami-02e136e904f3da870
+      HVMG2: NOT_SUPPORTED
+Resources:
+  VPC:
+    Type: 'AWS::EC2::VPC'
+    Properties:
+      CidrBlock: 10.0.0.0/24
+      Tags:
+        - Key: Name
+          Value: CEG3120 Project6 VPC
+        - Key: Application
+          Value: !Ref 'AWS::StackId'
+  InternetGateway:
+    Type: 'AWS::EC2::InternetGateway'
+    Properties:
+      Tags:
+        - Key: Application
+          Value: !Ref 'AWS::StackId'
+  AttachGateway:
+    Type: 'AWS::EC2::VPCGatewayAttachment'
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+  Subnet:
+    Type: 'AWS::EC2::Subnet'
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.0.0/28
+      Tags:
+        - Key: Name
+          Value: Subnet
+        - Key: Application
+          Value: !Ref 'AWS::StackId'
+  RouteTable:
+    Type: 'AWS::EC2::RouteTable'
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Application
+          Value: !Ref 'AWS::StackId'
+  Route:
+    Type: 'AWS::EC2::Route'
+    DependsOn: AttachGateway
+    Properties:
+      RouteTableId: !Ref RouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+  SubnetRouteTableAssociation:
+    Type: 'AWS::EC2::SubnetRouteTableAssociation'
+    Properties:
+      SubnetId: !Ref Subnet
+      RouteTableId: !Ref RouteTable
+  # Associate existing EIP to instance
+  EIPAddressAssoc:
+    Type: 'AWS::EC2::EIPAssociation'
+    Properties:
+      AllocationId: !Ref EIPAllocationId
+      InstanceId: !Ref DockerHostInstance
+  SecurityGroup:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      VpcId: !Ref VPC
+      GroupDescription: Enable SSH, HTTP, and HTTPS access
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: '22'
+          ToPort: '22'
+          CidrIp: 130.108.0.0/16 # WSU CIDR
+        - IpProtocol: tcp
+          FromPort: '22'
+          ToPort: '22'
+          CidrIp: !Ref SSHLocation
+        # HTTP/HTTPS public access
+        - IpProtocol: tcp
+          FromPort: '80'
+          ToPort: '80'
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: '443'
+          ToPort: '443'
+          CidrIp: 0.0.0.0/0
+  # Instance definition
+  DockerHostInstance:
+    Type: 'AWS::EC2::Instance'
+    DependsOn: AttachGateway
+    Properties:
+      ImageId: !FindInMap
+        - AWSRegionUbuntu
+        - !Ref 'AWS::Region'
+        - !FindInMap
+          - AWSInstanceType2Arch
+          - t2.micro
+          - Arch
+      InstanceType: t2.micro
+      KeyName: !Ref KeyName
+      Tags:
+        - Key: Name
+          Value: docker-host
+        - Key: Application
+          Value: !Ref 'AWS::StackId'
+      NetworkInterfaces:
+        - GroupSet:
+            - !Ref SecurityGroup
+          AssociatePublicIpAddress: 'true'
+          DeviceIndex: '0'
+          DeleteOnTermination: 'true'
+          SubnetId: !Ref Subnet
+          PrivateIpAddress: 10.0.0.8 # EC Private ip 15 or lower and higher than 1
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash -xe
+          # Upgrade installed packages first
+          apt update
+          apt full-upgrade -y
+
+          # Install desired packages
+          apt install -y \
+            git \
+            fish \
+            doc-base \
+            curl \
+            ripgrep \
+            fd-find \
+            fail2ban \
+            w3m \
+            kakoune \
+            ca-certificates \
+            gnupg \
+            lsb-release
+
+          # Install Docker
+          curl -fsSL https://download.docker.com/linux/ubuntu/gpg | \
+            sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
+          echo \
+            "deb [arch=$(dpkg --print-architecture) \
+            signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] \
+            https://download.docker.com/linux/ubuntu \
+            $(lsb_release -cs) stable" | \
+            sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+          apt-get update
+          apt-get install -y \
+            docker-ce docker-ce-cli containerd.io
+
+          # Set up Starship prompt on fish shell
+          sh -c "$(curl -fsSL https://starship.rs/install.sh)" -- -y
+          echo "starship init fish | source" >> /etc/fish/config.fish
+
+          # Make fish the default shell
+          sed -i 's#/bin/bash#/usr/bin/fish#g' /etc/passwd
+
+          # Set hostname
+          hostnamectl set-hostname docker-host
+
+          # Initialize docker
+          docker run -d \
+          -p 80:80 \
+          -p 443:443 \
+          --restart always \
+          -h ${PublicURL} \
+          weaver254wright/cicdweaver254:latest
+
+          # Close out with reboot
+          reboot
+Outputs:
+  PublicIp:
+    Value: !GetAtt DockerHostInstance.PublicIp
+    Description: Public IP address
+  WebsiteURL:
+    Value: !Sub 'http://${PublicURL}'
+    Description: Website URL
