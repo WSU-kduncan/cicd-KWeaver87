@@ -6,7 +6,6 @@ Parameters:
     Description: Name of an existing EC2 KeyPair to enable SSH access to the instance
     Type: 'AWS::EC2::KeyPair::KeyName'
     ConstraintDescription: must be the name of an existing EC2 KeyPair.
-  # This SSHLocation could go.
   SSHLocation:
     Description: The CIDR address range that can be used to SSH to the EC2 instance
     Type: String
@@ -158,7 +157,7 @@ Resources:
             gnupg \
             lsb-release
 
-          # Install Docker
+          # Install Docker per https://docs.docker.com/engine/install/ubuntu/#install-using-the-repository
           curl -fsSL https://download.docker.com/linux/ubuntu/gpg | \
             sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
           echo \
@@ -171,11 +170,9 @@ Resources:
           apt-get install -y \
             docker-ce docker-ce-cli containerd.io
 
-          # Set up Starship prompt on fish shell
+          # Set up Starship prompt on fish shell and make it default
           sh -c "$(curl -fsSL https://starship.rs/install.sh)" -- -y
           echo "starship init fish | source" >> /etc/fish/config.fish
-
-          # Make fish the default shell
           sed -i 's#/bin/bash#/usr/bin/fish#g' /etc/passwd
 
           # Set hostname
@@ -187,6 +184,7 @@ Resources:
           -p 443:443 \
           --restart always \
           -h ${PublicURL} \
+          --name cicdweaver254_instance \
           weaver254wright/cicdweaver254:latest
 
           # Close out with reboot
