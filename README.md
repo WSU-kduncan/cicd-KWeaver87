@@ -54,16 +54,17 @@ Register and issue cert:
 
 ```sh
 acme.sh --register-account -m email@address.com
-acme.sh --issue -d your.domain.here --standalone
+acme.sh --issue --standalone -d your.domain.here
 ```
 
 Install cert:
 
 ```sh
-acme.sh --install-cert -d your.domain.here \
+acme.sh --install-cert \
   --cert-file /etc/nginx/ssl/cert \
   --key-file /etc/nginx/ssl/key \
-  --fullchain-file /etc/nginx/ssl/fullchain
+  --fullchain-file /etc/nginx/ssl/fullchain \
+  -d your.domain.here
 ```
 
 ### SSL info
