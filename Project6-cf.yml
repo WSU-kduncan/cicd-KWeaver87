@@ -178,6 +178,7 @@ Resources:
 
           # Set hostname
           hostnamectl set-hostname docker-host
+          mkdir -p /etc/nginx/ssl
 
           # Initialize docker
           docker run -d \
