@@ -155,7 +155,8 @@ Resources:
             kakoune \
             ca-certificates \
             gnupg \
-            lsb-release
+            lsb-release \
+            socat
 
           # Install Docker per https://docs.docker.com/engine/install/ubuntu/#install-using-the-repository
           curl -fsSL https://download.docker.com/linux/ubuntu/gpg | \
@@ -185,7 +186,14 @@ Resources:
           --restart always \
           -h ${PublicURL} \
           --name cicdweaver254_instance \
+          --mount type=bind,src=/etc/nginx/ssl,dst=/etc/nginx/ssl,ro \
           weaver254wright/cicdweaver254:latest
+
+          # Install acme.sh
+          export LE_WORKING_DIR=/opt/acme.sh
+          curl -sSL https://get.acme.sh | sh
+          ln -s /opt/acme.sh/acme.sh /usr/bin/acme.sh
+          /opt/acme.sh/acme.sh --upgrade --auto-upgrade
 
           # Close out with reboot
           reboot

@@ -48,17 +48,13 @@ A CloudFormation template's [install script](./Project6-cf.yml#L141) handles the
 
 The server won't work properly until SSL is fully configured, as it is set to forward connections to HTTPS. Best not to automate these commands, as they depend upon the domain name being resolvable.
 
-SSH into host, then open a shell inside container:
-
-```sh
-sudo docker exec -it cicdweaver254_instance sh
-```
+SSH into host, then and run acme.sh commands as root (`sudo -i`).
 
 Register and issue cert:
 
 ```sh
 acme.sh --register-account -m email@address.com
-acme.sh --issue -d your.domain.here -w /var/www/
+acme.sh --issue -d your.domain.here --standalone
 ```
 
 Install cert:
